@@ -17,6 +17,7 @@
 package dev.patrickgold.florisboard.ime.text.key
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
 import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.os.Handler
@@ -59,6 +60,7 @@ class KeyView(
             field = value
             updateKeyPressedBackground()
         }
+    private var hasTriggeredGestureMove: Boolean = false
     private var osHandler: Handler? = null
     private var osTimer: Timer? = null
     private val prefs: PrefHelper = PrefHelper.getDefaultInstance(context)
@@ -68,7 +70,8 @@ class KeyView(
     private var desiredHeight: Int = 0
     private var drawable: Drawable? = null
     private var drawableColor: Int = 0
-    private var drawablePadding: Int = 0
+    private var drawablePaddingH: Int = 0
+    private var drawablePaddingV: Int = 0
     private var label: String? = null
     private var labelPaint: Paint = Paint().apply {
         alpha = 255
@@ -215,6 +218,7 @@ class KeyView(
         }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                hasTriggeredGestureMove = false
                 shouldBlockNextKeyCode = false
                 florisboard?.prefs?.keyboard?.let {
                     if (it.popupEnabled){
@@ -280,13 +284,22 @@ class KeyView(
                 osHandler?.removeCallbacksAndMessages(null)
                 osTimer?.cancel()
                 osTimer = null
-                val retData = keyboardView.popupManager.getActiveKeyData(this)
-                keyboardView.popupManager.hide()
-                if (event.actionMasked != MotionEvent.ACTION_CANCEL && !shouldBlockNextKeyCode && retData != null) {
-                    florisboard?.textInputManager?.sendKeyPress(retData)
-                    performClick()
+                if (hasTriggeredGestureMove && data.code == KeyCode.DELETE) {
+                    hasTriggeredGestureMove = false
+                    florisboard?.activeEditorInstance?.apply {
+                        if (selection.isSelectionMode) {
+                            deleteBackwards()
+                        }
+                    }
                 } else {
-                    shouldBlockNextKeyCode = false
+                    val retData = keyboardView.popupManager.getActiveKeyData(this)
+                    keyboardView.popupManager.hide()
+                    if (event.actionMasked != MotionEvent.ACTION_CANCEL && !shouldBlockNextKeyCode && retData != null) {
+                        florisboard?.textInputManager?.sendKeyPress(retData)
+                        performClick()
+                    } else {
+                        shouldBlockNextKeyCode = false
+                    }
                 }
             }
             else -> return false
@@ -310,6 +323,7 @@ class KeyView(
                                     selection.end
                                 )
                             }
+                            hasTriggeredGestureMove = true
                             shouldBlockNextKeyCode = true
                             true
                         }
@@ -330,17 +344,7 @@ class KeyView(
                     }
                     else -> false
                 }
-                SwipeGesture.Type.TOUCH_UP -> when (prefs.gestures.deleteKeySwipeLeft) {
-                    SwipeAction.DELETE_CHARACTERS_PRECISELY -> {
-                        florisboard?.activeEditorInstance?.apply {
-                            if (selection.isSelectionMode) {
-                                deleteBackwards()
-                            }
-                        }
-                        true
-                    }
-                    else -> false
-                }
+                else -> false
             }
             KeyCode.SPACE -> when (type) {
                 SwipeGesture.Type.TOUCH_MOVE -> when (direction) {
@@ -427,7 +431,8 @@ class KeyView(
             }
         }
 
-        drawablePadding = (0.2f * height).toInt()
+        drawablePaddingH = (0.2f * width).toInt()
+        drawablePaddingV = (0.2f * height).toInt()
 
         // MUST CALL THIS
         setMeasuredDimension(width, height)
@@ -588,7 +593,7 @@ class KeyView(
      * @param boxHeight The max height for the surrounding box of [text].
      * @param text The text for which the size should be calculated.
      */
-    private fun setTextSizeFor(boxPaint: Paint, boxWidth: Float, boxHeight: Float, text: String) {
+    private fun setTextSizeFor(boxPaint: Paint, boxWidth: Float, boxHeight: Float, text: String, multiplier: Float = 1.0f): Float {
         var stage = 1
         var textSize = 0.0f
         while (stage < 3) {
@@ -604,7 +609,9 @@ class KeyView(
                 stage++
             }
         }
+        textSize *= multiplier
         boxPaint.textSize = textSize
+        return textSize
     }
 
     /**
@@ -760,11 +767,12 @@ class KeyView(
             } else {
                 marginV = (measuredHeight - measuredWidth) / 2
             }
+            // Note: using the vertical padding for horizontal as well on purpose here
             drawable.setBounds(
-                marginH + drawablePadding,
-                marginV + drawablePadding,
-                measuredWidth - marginH - drawablePadding,
-                measuredHeight - marginV - drawablePadding)
+                marginH + drawablePaddingV,
+                marginV + drawablePaddingV,
+                measuredWidth - marginH - drawablePaddingV,
+                measuredHeight - marginV - drawablePaddingV)
             drawable.colorFilter = BlendModeColorFilterCompat.createBlendModeColorFilterCompat(
                 drawableColor,
                 BlendModeCompat.SRC_ATOP
@@ -780,22 +788,33 @@ class KeyView(
                     labelPaint.textSize = resources.getDimension(R.dimen.key_numeric_textSize)
                 }
                 else -> when {
-                    data.type == KeyType.CHARACTER && data.code != KeyCode.SPACE -> {
-                        setTextSizeFor(
+                    (data.type == KeyType.CHARACTER || data.type == KeyType.NUMERIC) &&
+                            data.code != KeyCode.SPACE -> {
+                        val cachedTextSize = setTextSizeFor(
                             labelPaint,
-                            desiredWidth - (2.2f * drawablePadding),
-                            desiredHeight - (3.0f * drawablePadding),
+                            desiredWidth - (2.6f * drawablePaddingH),
+                            desiredHeight - (3.4f * drawablePaddingV),
                             // Note: taking a "X" here because it is one of the biggest letters and
                             //  the keys must have the same base character for calculation, else
                             //  they will all look different and weird...
-                            "X"
+                            "X",
+                            when (resources.configuration.orientation) {
+                                Configuration.ORIENTATION_PORTRAIT -> {
+                                    prefs.keyboard.fontSizeMultiplierPortrait.toFloat() / 100.0f
+                                }
+                                Configuration.ORIENTATION_LANDSCAPE -> {
+                                    prefs.keyboard.fontSizeMultiplierLandscape.toFloat() / 100.0f
+                                }
+                                else -> 1.0f
+                            }
                         )
+                        keyboardView.popupManager.keyPopupTextSize = cachedTextSize
                     }
                     else -> {
                         setTextSizeFor(
                             labelPaint,
-                            measuredWidth - (2.6f * drawablePadding),
-                            measuredHeight - (3.6f * drawablePadding),
+                            measuredWidth - (1.2f * drawablePaddingH),
+                            measuredHeight - (3.6f * drawablePaddingV),
                             when (data.code) {
                                 KeyCode.VIEW_CHARACTERS, KeyCode.VIEW_SYMBOLS, KeyCode.VIEW_SYMBOLS2 -> {
                                     resources.getString(R.string.key__view_symbols)
