@@ -56,7 +56,7 @@ private var florisboardInstance: FlorisBoard? = null
  * Core class responsible to link together both the text and media input managers as well as
  * managing the one-handed UI.
  */
-class FlorisBoard : InputMethodService(), ClipboardManager.OnPrimaryClipChangedListener {
+open class FlorisBoard : InputMethodService(), ClipboardManager.OnPrimaryClipChangedListener {
     lateinit var prefs: PrefHelper
         private set
 
@@ -73,6 +73,8 @@ class FlorisBoard : InputMethodService(), ClipboardManager.OnPrimaryClipChangedL
     private val osHandler = Handler()
 
     var activeEditorInstance: EditorInstance = EditorInstance.default()
+
+
 
     lateinit var subtypeManager: SubtypeManager
     lateinit var activeSubtype: Subtype
@@ -127,6 +129,13 @@ class FlorisBoard : InputMethodService(), ClipboardManager.OnPrimaryClipChangedL
                 else -> R.style.KeyboardThemeBase_Day
             }
         }
+    }
+
+
+    fun setOnEventCharacterListener(eventCharacterListener:EventCharacterListener?){
+
+        EditorInstance.default().setOnEventCharacterListener(eventCharacterListener)
+
     }
 
     override fun onCreate() {

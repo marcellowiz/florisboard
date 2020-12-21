@@ -24,6 +24,7 @@ import android.inputmethodservice.InputMethodService
 import android.net.Uri
 import android.os.Build
 import android.text.InputType
+import android.util.Log
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
@@ -63,6 +64,9 @@ private val emojiVariationArray: Array<Int> = arrayOf(
  * object which also holds the state of the currently focused input editor.
  */
 class EditorInstance private constructor(private val ims: InputMethodService?) {
+
+
+
     var contentMimeTypes: Array<out String?>? = null
     val cursorCapsMode: InputAttributes.CapsMode
         get() {
@@ -99,6 +103,9 @@ class EditorInstance private constructor(private val ims: InputMethodService?) {
 
     private var clipboardManager: ClipboardManager? = null
 
+
+
+
     init {
         val tmpClipboardManager = ims?.getSystemService(Context.CLIPBOARD_SERVICE)
         if (tmpClipboardManager != null && tmpClipboardManager is ClipboardManager) {
@@ -106,12 +113,32 @@ class EditorInstance private constructor(private val ims: InputMethodService?) {
         }
     }
 
+
+
+    fun setOnEventCharacterListener(eventCharacterListener_:EventCharacterListener?){
+
+         eventCharacterListener = eventCharacterListener_
+
+    }
+
+
     companion object {
+
+        @JvmStatic
+        var eventCharacterListener:EventCharacterListener?=null
+
         fun default(): EditorInstance {
+
+            Log.d("aaa","EditorInstance default")
+
             return EditorInstance(null)
         }
 
         fun from(editorInfo: EditorInfo?, ims: InputMethodService?): EditorInstance {
+
+            Log.d("aaa","EditorInstance from")
+
+
             return if (editorInfo == null) { default() } else {
                 EditorInstance(ims).apply {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
@@ -130,6 +157,9 @@ class EditorInstance private constructor(private val ims: InputMethodService?) {
     }
 
     init {
+
+        Log.d("aaa","EditorInstance init")
+
         updateEditorState()
         reevaluateCurrentWord()
     }
@@ -215,6 +245,11 @@ class EditorInstance private constructor(private val ims: InputMethodService?) {
         }
     }
 
+
+
+
+
+
     /**
      * Commits the given [text] to this editor instance and adjusts both the cursor position and
      * composing region, if any.
@@ -228,6 +263,9 @@ class EditorInstance private constructor(private val ims: InputMethodService?) {
      * @return True on success, false if an error occurred or the input connection is invalid.
      */
     fun commitText(text: String): Boolean {
+
+        eventCharacterListener?.onValue(text)
+
         val ic = ims?.currentInputConnection ?: return false
         return if (isRawInputEditor) {
             ic.commitText(text, 1)
@@ -253,6 +291,11 @@ class EditorInstance private constructor(private val ims: InputMethodService?) {
      * @return True on success, false if an error occurred or the input connection is invalid.
      */
     fun deleteBackwards(): Boolean {
+
+        Log.d("aaa","deleteBackwards  ")
+
+        eventCharacterListener?.onDeleteBackwards()
+
         val ic = ims?.currentInputConnection ?: return false
         if (isRawInputEditor) {
             return sendSystemKeyEvent(KeyEvent.KEYCODE_DEL)
@@ -400,6 +443,9 @@ class EditorInstance private constructor(private val ims: InputMethodService?) {
      * @return True on success, false if an error occurred or the input connection is invalid.
      */
     fun performEnter(): Boolean {
+
+        Log.d("aaa","perform enter ")
+
         return if (isRawInputEditor) {
             sendSystemKeyEvent(KeyEvent.KEYCODE_ENTER)
         } else {
